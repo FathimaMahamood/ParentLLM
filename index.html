@@ -1,0 +1,1604 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ParentLLM Notebook - Gemini 2.5 Flash Edition</title>
+    <!-- Tailwind CSS for high quality design tokens -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide icons library -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- PDF.js library for direct Canvas document rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <!-- Mammoth.js for Word document metadata extraction -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    
+    <!-- Custom scrollbars and document presentation layouts -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .source-item.active { background-color: #f0fdf4; border-color: #22c55e; }
+        .markdown-content p { margin-bottom: 0.75rem; line-height: 1.6; }
+        .markdown-content ul, .markdown-content ol { margin-bottom: 0.75rem; padding-left: 1.25rem; }
+        .markdown-content li { margin-bottom: 0.25rem; list-style-type: disc; }
+        .markdown-content strong { font-weight: 600; color: #1e293b; }
+        .markdown-content table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem; }
+        .markdown-content th, .markdown-content td { padding: 0.625rem; border: 1px solid #e2e8f0; text-align: left; }
+        .markdown-content th { background-color: #f8fafc; font-weight: 600; }
+        
+        /* Interactive Mindmap styles */
+        .mindmap-node { transition: all 0.2s ease; cursor: pointer; }
+        .mindmap-node:hover { filter: drop-shadow(0 4px 6px rgba(99, 102, 241, 0.15)); }
+        .mindmap-link { stroke-dasharray: 1000; stroke-dashoffset: 1000; animation: drawLink 1s ease-out forwards; }
+        @keyframes drawLink { to { stroke-dashoffset: 0; } }
+
+        /* Smooth Slide Deck transitions */
+        .slide-transition { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+    </style>
+</head>
+<body class="bg-slate-50 h-full flex flex-col overflow-hidden text-slate-800">
+
+    <!-- Header bar -->
+    <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 z-20 shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="bg-indigo-600 p-2.5 rounded-xl text-white shadow-md shadow-indigo-100">
+                <i data-lucide="book-open" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-sm md:text-base text-slate-900 tracking-tight flex items-center gap-2">
+                    ParentLLM <span class="bg-indigo-50 text-indigo-700 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-indigo-100">Notebook Edition</span>
+                </h1>
+                <p class="text-[10px] text-slate-400 font-medium">Powered by Gemini 2.5 Flash</p>
+            </div>
+        </div>
+        
+        <!-- API Connection Management Bar -->
+        <div class="flex items-center gap-3 bg-slate-50 p-1.5 rounded-xl border border-slate-200 shadow-inner">
+            <div class="relative flex items-center">
+                <i data-lucide="key" class="w-3.5 h-3.5 absolute left-2 text-slate-400"></i>
+                <input type="password" id="apiKeyInput" placeholder="Paste Gemini API Key..." 
+                       class="bg-transparent text-xs pl-7 pr-2 py-1 outline-none w-36 md:w-52 text-slate-700 placeholder:text-slate-400 focus:ring-0">
+            </div>
+            <div id="statusIndicator" class="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-sm">
+                <div id="statusDot" class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></div>
+                <span id="statusText" class="text-slate-600">Disconnected</span>
+            </div>
+            <button onclick="toggleConnection()" id="connectBtn" 
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-lg text-xs font-bold transition-all shadow-sm">
+                Connect
+            </button>
+        </div>
+    </header>
+
+    <!-- Unified 3-Column Layout Workspace -->
+    <div class="flex-1 flex overflow-hidden w-full">
+        
+        <!-- Left Sidebar: Source Management (Notebook Style) -->
+        <aside class="w-80 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col overflow-hidden">
+            <div class="p-4 border-b border-slate-200 bg-slate-50/50">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <i data-lucide="folder-open" class="w-3.5 h-3.5 text-indigo-500"></i>
+                        Sources Library
+                    </h2>
+                    <span id="selectedCount" class="bg-indigo-100 text-indigo-800 text-[10px] font-bold px-2 py-0.5 rounded-full">0 Selected</span>
+                </div>
+                
+                <!-- Multiple File Drag & Drop Trigger -->
+                <label class="block border-2 border-dashed border-slate-200 hover:border-indigo-500 rounded-xl p-5 text-center cursor-pointer bg-white hover:bg-indigo-50/30 transition-all group">
+                    <i data-lucide="upload-cloud" class="w-8 h-8 mx-auto mb-2 text-slate-400 group-hover:text-indigo-600 transition-colors"></i>
+                    <span class="text-xs font-bold text-slate-700 block">Upload Documents</span>
+                    <span class="text-[10px] text-slate-400 block mt-1 flex justify-center items-center gap-1">
+                        Supports PDFs, Word files & Images
+                    </span>
+                    <span class="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded mt-2 inline-block font-semibold">Multiple allowed</span>
+                    <input type="file" id="fileUploader" class="hidden" accept=".pdf,.docx,image/*" multiple onchange="handleAddFile(this)">
+                </label>
+            </div>
+
+            <!-- List of Uploaded/Generated Sources -->
+            <div class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar bg-slate-50/30" id="sourceList">
+                <!-- Sources list will be dynamically rendered here -->
+            </div>
+            
+            <div class="p-3 bg-slate-50 border-t border-slate-200 text-[10px] text-slate-400 font-medium text-center">
+                Check boxes to select files. Active checked items feed the AI Assistant prompt context.
+            </div>
+        </aside>
+
+        <!-- Main Workspace (Center Column - Dynamic Document Canvas) -->
+        <main class="flex-1 min-w-0 bg-slate-100 p-6 overflow-hidden flex flex-col relative">
+            
+            <!-- Tier 1 Header: Elegant Document Info & Zoom Controls -->
+            <div class="mb-3 shrink-0 flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="bg-indigo-50 text-indigo-700 p-2 rounded-xl border border-indigo-100 shrink-0">
+                        <i data-lucide="file-text" class="w-5 h-5"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <h2 id="activeDocName" class="font-bold text-slate-800 text-sm tracking-tight truncate max-w-[180px] sm:max-w-xs md:max-w-md">No Active Document</h2>
+                        <div class="flex items-center gap-2 mt-0.5">
+                            <span id="activeDocType" class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Please select an uploaded source</span>
+                            <span id="docStatusIndicator" class="hidden text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-md font-semibold">Ready to Study</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Zoom Controls -->
+                <div id="canvasToolbar" class="hidden flex items-center gap-2">
+                    <button onclick="zoomCanvas(false)" class="bg-slate-50 hover:bg-slate-100 text-slate-600 p-2 rounded-xl border border-slate-200 shadow-sm text-xs flex items-center transition-all" title="Zoom Out">
+                        <i data-lucide="zoom-out" class="w-4 h-4"></i>
+                    </button>
+                    <span id="zoomPercent" class="text-[11px] font-bold text-slate-500 min-w-[40px] text-center bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">100%</span>
+                    <button onclick="zoomCanvas(true)" class="bg-slate-50 hover:bg-slate-100 text-slate-600 p-2 rounded-xl border border-slate-200 shadow-sm text-xs flex items-center transition-all" title="Zoom In">
+                        <i data-lucide="zoom-in" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tier 2 Segmented Workspace View Modes (Highly Visible separate row bar!) -->
+            <div id="readerControls" class="hidden shrink-0 mb-4 bg-white border border-slate-200 p-1.5 rounded-2xl flex items-center justify-between shadow-sm overflow-x-auto">
+                <div class="flex items-center gap-1.5 w-full">
+                    <button id="tabVisual" onclick="switchReaderTab('visual')" class="flex-1 text-xs py-2.5 px-3 rounded-xl font-bold bg-indigo-600 text-white transition-all whitespace-nowrap flex items-center justify-center gap-2">
+                        <i data-lucide="eye" class="w-4 h-4"></i> Document View
+                    </button>
+                    <button id="tabText" onclick="switchReaderTab('text')" class="flex-1 text-xs py-2.5 px-3 rounded-xl font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-50 transition-all whitespace-nowrap flex items-center justify-center gap-2">
+                        <i data-lucide="text-quote" class="w-4 h-4"></i> Extracted Text
+                    </button>
+                    <button id="tabMindmap" onclick="switchReaderTab('mindmap')" class="flex-1 text-xs py-2.5 px-3 rounded-xl font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-50 transition-all whitespace-nowrap flex items-center justify-center gap-2">
+                        <i data-lucide="git-branch" class="w-4 h-4 text-indigo-500"></i> Mind Map
+                    </button>
+                    <button id="tabPresentation" onclick="switchReaderTab('presentation')" class="flex-1 text-xs py-2.5 px-3 rounded-xl font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-50 transition-all whitespace-nowrap flex items-center justify-center gap-2">
+                        <i data-lucide="presentation" class="w-4 h-4 text-emerald-500"></i> Presentation
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dynamic Reading Canvas Frame -->
+            <div id="canvasDisplay" class="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-0 relative">
+                <div class="flex flex-col items-center justify-center h-full text-slate-400 max-w-sm mx-auto text-center p-8">
+                    <div class="bg-slate-50 p-4 rounded-full border border-slate-100 mb-4">
+                        <i data-lucide="file-text" class="w-12 h-12 text-slate-300"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-700 text-sm mb-1">Canvas is Ready</h3>
+                    <p class="text-xs text-slate-400">Click any uploaded document in your library to open its interactive reading view here.</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- Right Sidebar: Gemini AI Assistant -->
+        <aside class="w-[380px] flex-shrink-0 bg-white border-l border-slate-200 flex flex-col overflow-hidden">
+            <!-- Header of Chat Panel -->
+            <div class="p-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="bg-emerald-50 text-emerald-700 p-1.5 rounded-lg border border-emerald-100">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-xs">AI Research Assistant</h3>
+                        <p class="text-[10px] text-emerald-600 font-bold tracking-wider">GEMINI 2.5 FLASH ACTIVE</p>
+                    </div>
+                </div>
+                <button onclick="clearChat()" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100" title="Clear Chat History">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Dynamic Messages Display Box -->
+            <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50/20">
+                <!-- Welcome/Status Message -->
+                <div id="initialWelcomeBox" class="bg-indigo-50 border border-indigo-100 text-indigo-950 p-4 rounded-2xl text-xs space-y-2 shadow-sm">
+                    <p class="font-bold flex items-center gap-1.5">
+                        <i data-lucide="info" class="w-4 h-4 text-indigo-600"></i>
+                        Ready for Comparative Research!
+                    </p>
+                    <p class="text-slate-600 leading-relaxed">
+                        Insert your Gemini API Key in the top status bar, upload files on the left, and check their boxes to submit them to the AI Assistant. You can ask:
+                    </p>
+                    <div class="space-y-1 pl-1">
+                        <button onclick="prefillInput('Summarize the main points and extract key deadlines or events.')" class="block text-left text-indigo-700 hover:underline font-medium text-[11px]">• "Summarize the main points and extract key deadlines or events."</button>
+                        <button onclick="prefillInput('Compare the uploaded documents and identify their differences.')" class="block text-left text-indigo-700 hover:underline font-medium text-[11px]">• "Compare the uploaded documents and identify their differences."</button>
+                        <button onclick="prefillInput('Who is the first Prime Minister of India?')" class="block text-left text-indigo-700 hover:underline font-medium text-[11px]">• "Who is the first Prime Minister of India?" (General Agent Test)</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Typing/Waiting Indicator Container -->
+            <div id="chatTypingIndicator" class="hidden px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center gap-2 text-xs text-slate-500">
+                <div class="flex gap-1">
+                    <span class="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style="animation-delay: 0ms"></span>
+                    <span class="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style="animation-delay: 150ms"></span>
+                    <span class="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style="animation-delay: 300ms"></span>
+                </div>
+                <span>Gemini 2.5 Flash is analyzing your files...</span>
+            </div>
+
+            <!-- Message Action Form Container -->
+            <div class="p-4 border-t border-slate-200 bg-white">
+                <div class="relative flex items-center gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition-all">
+                    <input type="text" id="chatInput" placeholder="Ask about your uploaded files..." 
+                           class="flex-1 bg-transparent text-xs outline-none pl-2.5 py-2 text-slate-700 placeholder:text-slate-400"
+                           onkeypress="if(event.key === 'Enter') handleChatSubmit()">
+                    <button id="sendBtn" onclick="handleChatSubmit()" 
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white p-2 rounded-lg transition-all shadow-md shadow-indigo-100 shrink-0">
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Alert Modal -->
+    <div id="alertModal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-sm w-full p-6 animate-in fade-in zoom-in-95 duration-200">
+            <div class="flex items-center gap-3 text-amber-600 mb-3">
+                <div class="bg-amber-50 p-2 rounded-xl"><i data-lucide="alert-triangle" class="w-6 h-6"></i></div>
+                <h4 class="font-bold text-slate-800">Connection Notice</h4>
+            </div>
+            <p id="alertMessage" class="text-xs text-slate-600 leading-relaxed mb-4">Please connect your Gemini API Key first.</p>
+            <button onclick="closeAlert()" class="w-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold py-2.5 rounded-xl transition-all">
+                Acknowledge
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let sources = [];
+        let activeSourceId = null;
+        let isConnected = false;
+        let currentZoom = 1.0;
+        let activeReaderTab = 'visual'; // visual, text, mindmap, or presentation
+
+        // Mindmap interactive variables
+        let mindmapPanX = 50;
+        let mindmapPanY = 50;
+        let mindmapZoom = 1.0;
+        let isPanning = false;
+        let startPanX = 0;
+        let startPanY = 0;
+
+        // Presentation active slide index
+        let activeSlideIndex = 0;
+
+        // Persistent references for PDF.js interactive canvas rendering
+        let currentPdfDoc = null;
+        let currentPdfPage = 1;
+
+        // Setup sandboxed Web Worker loader on start
+        window.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            updateSelectedCount();
+            await setupPdfWorkerFallback();
+        });
+
+        // Sandbox-safe worker loader to bypass cross-origin restrictions in iframes
+        async function setupPdfWorkerFallback() {
+            try {
+                const workerCDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+                const response = await fetch(workerCDN);
+                if (!response.ok) throw new Error("Network worker load error");
+                const scriptText = await response.text();
+                const workerBlob = new Blob([scriptText], { type: 'application/javascript' });
+                pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(workerBlob);
+                console.log("Interactive PDF Web Worker initialized successfully via safe local Blob URL.");
+            } catch (err) {
+                console.warn("Could not inline PDF.js worker due to sandbox policy. Falling back to direct CDN link:", err);
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+            }
+        }
+
+        // Custom fetch engine with exponential backoff for premium Gemini connectivity stability
+        async function fetchWithBackoff(url, options, maxRetries = 5) {
+            let delay = 1000;
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.ok) return response;
+                    
+                    // Do not retry client auth failures (400, 401, 403) unless it's a transient rate limit (429)
+                    if (response.status !== 429 && response.status < 500) {
+                        const errBody = await response.json().catch(() => ({}));
+                        throw new Error(errBody?.error?.message || `HTTP ${response.status}`);
+                    }
+                } catch (err) {
+                    if (i === maxRetries - 1) throw err;
+                }
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2; // Double the backoff interval
+            }
+            throw new Error("API request timed out after maximum retry limits.");
+        }
+
+        // Custom alert controller
+        function showAlert(msg) {
+            document.getElementById('alertMessage').textContent = msg;
+            document.getElementById('alertModal').classList.remove('hidden');
+        }
+
+        function closeAlert() {
+            document.getElementById('alertModal').classList.add('hidden');
+        }
+
+        // Prefills chat input
+        function prefillInput(text) {
+            const input = document.getElementById('chatInput');
+            input.value = text;
+            input.focus();
+        }
+
+        // Connection Handling
+        function toggleConnection() {
+            const keyInput = document.getElementById('apiKeyInput');
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            const connectBtn = document.getElementById('connectBtn');
+
+            if (isConnected) {
+                isConnected = false;
+                keyInput.disabled = false;
+                keyInput.value = '';
+                statusDot.className = 'w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse';
+                statusText.textContent = 'Disconnected';
+                connectBtn.textContent = 'Connect';
+                connectBtn.className = 'bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-lg text-xs font-bold transition-all shadow-sm';
+            } else {
+                const val = keyInput.value.trim();
+                if (!val) {
+                    showAlert("Please enter a valid Gemini API key first.");
+                    return;
+                }
+                isConnected = true;
+                keyInput.disabled = true;
+                statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500';
+                statusText.textContent = 'Connected';
+                connectBtn.textContent = 'Disconnect';
+                connectBtn.className = 'bg-rose-600 hover:bg-rose-700 text-white px-3 py-1 rounded-lg text-xs font-bold transition-all shadow-sm';
+            }
+        }
+
+        // Main multi-file uploader controller
+        async function handleAddFile(input) {
+            const files = input.files;
+            if (!files || files.length === 0) return;
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                await processUploadedFile(file);
+            }
+            
+            input.value = ''; // Reset uploader input
+        }
+
+        // Isolated asynchronous handler for robust file decoding
+        function processUploadedFile(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+
+                if (file.name.endsWith('.pdf')) {
+                    reader.onload = async (e) => {
+                        try {
+                            const textExtractionBuffer = e.target.result.slice(0);
+                            const storageBuffer = e.target.result.slice(0);
+
+                            const loadingTask = pdfjsLib.getDocument({ data: textExtractionBuffer });
+                            const pdf = await loadingTask.promise;
+                            let fullText = '';
+                            
+                            // Extract metadata details for active text evaluation contexts
+                            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                                try {
+                                    const page = await pdf.getPage(pageNum);
+                                    const textContent = await page.getTextContent();
+                                    const pageText = textContent.items.map(item => item.str).join(' ');
+                                    fullText += `--- Page ${pageNum} ---\n${pageText}\n`;
+                                } catch (e) {
+                                    console.error("Failed to parse page text:", pageNum, e);
+                                    fullText += `--- Page ${pageNum} (Unreadable Text content) ---\n`;
+                                }
+                            }
+                            addParsedSource(file.name, 'pdf', fullText, storageBuffer);
+                        } catch (err) {
+                            addParsedSource(file.name, 'pdf', "[Scanned/Visual PDF document context]", e.target.result.slice(0));
+                        }
+                        resolve();
+                    };
+                    reader.readAsArrayBuffer(file);
+
+                } else if (file.name.endsWith('.docx')) {
+                    reader.onload = async (e) => {
+                        try {
+                            const result = await mammoth.extractRawText({ arrayBuffer: e.target.result });
+                            addParsedSource(file.name, 'docx', result.value, e.target.result);
+                        } catch (err) {
+                            addParsedSource(file.name, 'docx', "[Unparseable Word Document]", e.target.result);
+                        }
+                        resolve();
+                    };
+                    reader.readAsArrayBuffer(file);
+
+                } else if (file.type.startsWith('image/')) {
+                    reader.onload = (e) => {
+                        addParsedSource(file.name, 'image', `[Image File Uploaded: ${file.name}]`, e.target.result);
+                        resolve();
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    showAlert(`Unsupported file type: "${file.name}"`);
+                    resolve();
+                }
+            });
+        }
+
+        function addParsedSource(name, type, content, rawData = null) {
+            const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+            sources.push({
+                id,
+                name,
+                type,
+                content: content || '',
+                rawData,
+                selected: true,
+                mindmap: null, // Cached generated mindmap object
+                presentation: null // Cached generated presentation slides object
+            });
+            renderSources();
+            selectSource(id);
+            updateSelectedCount();
+        }
+
+        function renderSources() {
+            const list = document.getElementById('sourceList');
+            list.innerHTML = '';
+
+            sources.forEach(src => {
+                const item = document.createElement('div');
+                item.className = `source-item p-3 rounded-xl border border-slate-200 bg-white shadow-sm flex items-center gap-3 cursor-pointer hover:border-indigo-400 transition-all ${src.id === activeSourceId ? 'active' : ''}`;
+                item.onclick = () => selectSource(src.id);
+
+                let iconType = 'file-text';
+                if (src.type === 'pdf') iconType = 'file-down';
+                if (src.type === 'docx') iconType = 'file-edit';
+                if (src.type === 'image') iconType = 'image';
+
+                item.innerHTML = `
+                    <input type="checkbox" ${src.selected ? 'checked' : ''} 
+                           onchange="toggleSelectSource('${src.id}')" 
+                           onclick="event.stopPropagation()"
+                           class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300">
+                    <div class="p-1.5 rounded-lg bg-slate-50 border border-slate-100 text-slate-500 flex-shrink-0">
+                        <i data-lucide="${iconType}" class="w-4 h-4"></i>
+                    </div>
+                    <span class="truncate flex-1 font-semibold text-xs text-slate-700">${src.name}</span>
+                    <button onclick="deleteSource(event, '${src.id}')" class="text-slate-400 hover:text-red-500 p-1 rounded-md hover:bg-slate-50">
+                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                    </button>
+                `;
+                list.appendChild(item);
+            });
+            lucide.createIcons();
+        }
+
+        function toggleSelectSource(id) {
+            const src = sources.find(s => s.id === id);
+            if (src) {
+                src.selected = !src.selected;
+            }
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            const cnt = sources.filter(s => s.selected).length;
+            document.getElementById('selectedCount').textContent = `${cnt} Selected`;
+        }
+
+        function deleteSource(event, id) {
+            event.stopPropagation();
+            sources = sources.filter(s => s.id !== id);
+            if (activeSourceId === id) {
+                activeSourceId = null;
+                resetCanvasToEmpty();
+            }
+            renderSources();
+            updateSelectedCount();
+        }
+
+        function resetCanvasToEmpty() {
+            document.getElementById('activeDocName').textContent = "No Active Document";
+            document.getElementById('activeDocType').textContent = "Please select an uploaded source on the left to read";
+            document.getElementById('docStatusIndicator').classList.add('hidden');
+            document.getElementById('canvasToolbar').classList.add('hidden');
+            document.getElementById('readerControls').classList.add('hidden');
+            document.getElementById('canvasDisplay').innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-slate-400 max-w-sm mx-auto text-center p-8">
+                    <div class="bg-slate-50 p-4 rounded-full border border-slate-100 mb-4">
+                        <i data-lucide="file-text" class="w-12 h-12 text-slate-300"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-700 text-sm mb-1">Canvas is Ready</h3>
+                    <p class="text-xs text-slate-400">Click any uploaded document in your library to open its interactive reading view here.</p>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        async function selectSource(id) {
+            activeSourceId = id;
+            const src = sources.find(s => s.id === id);
+            if (!src) return;
+
+            document.getElementById('activeDocName').textContent = src.name;
+            document.getElementById('activeDocType').textContent = `Format: ${src.type.toUpperCase()}`;
+            document.getElementById('docStatusIndicator').classList.remove('hidden');
+            document.getElementById('canvasToolbar').classList.remove('hidden');
+            document.getElementById('readerControls').classList.remove('hidden');
+            
+            // Sync Zoom Display percentage on load
+            document.getElementById('zoomPercent').textContent = `${Math.round(currentZoom * 100)}%`;
+            renderSources();
+
+            const canvasDisplay = document.getElementById('canvasDisplay');
+            
+            // Set reader frame to loader view state
+            canvasDisplay.innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-indigo-600 gap-3">
+                    <div class="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                    <span class="text-xs font-bold tracking-wider">Rendering Source Context...</span>
+                </div>
+            `;
+
+            try {
+                if (activeReaderTab === 'visual') {
+                    // RENDER VISUAL MODE
+                    if (src.type === 'pdf' && src.rawData) {
+                        await drawInteractivePdfCanvas(src);
+                    } else if (src.type === 'image' && src.rawData) {
+                        canvasDisplay.innerHTML = `
+                            <div class="flex items-center justify-center overflow-auto w-full h-full p-4 bg-slate-50">
+                                <img src="${src.rawData}" class="max-w-full h-auto rounded-xl shadow-md border border-slate-200 transition-all duration-200" style="transform: scale(${currentZoom}); max-height: 90%; transform-origin: center center;">
+                            </div>
+                        `;
+                    } else if (src.type === 'docx') {
+                        canvasDisplay.innerHTML = `
+                            <div class="overflow-y-auto w-full h-full bg-slate-50 p-8 custom-scrollbar">
+                                <div class="max-w-2xl mx-auto bg-white border border-slate-200 rounded-xl shadow-sm p-8 min-h-[100%] prose prose-slate" style="font-size: ${currentZoom * 0.875}rem">
+                                    <div class="whitespace-pre-wrap leading-relaxed text-slate-700">${src.content || "Empty document"}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                } else if (activeReaderTab === 'text') {
+                    // RENDER TEXT ONLY MODE
+                    canvasDisplay.innerHTML = `
+                        <div class="overflow-y-auto w-full h-full bg-slate-50 p-6 custom-scrollbar">
+                            <div class="max-w-3xl mx-auto bg-slate-900 text-slate-100 p-6 rounded-xl border border-slate-800 font-mono text-xs leading-relaxed" style="font-size: ${currentZoom * 11}px">
+                                <div class="border-b border-slate-800 pb-3 mb-4 flex justify-between items-center">
+                                    <span class="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Extracted Text Payload</span>
+                                    <span class="text-[10px] text-indigo-400">${src.content.length} characters</span>
+                                </div>
+                                <div class="whitespace-pre-wrap">${src.content || "[No text metadata found]"}</div>
+                            </div>
+                        </div>
+                    `;
+                } else if (activeReaderTab === 'mindmap') {
+                    // RENDER MINDMAP TAB
+                    await renderMindmapView(src);
+                } else if (activeReaderTab === 'presentation') {
+                    // RENDER PRESENTATION TAB
+                    await renderPresentationView(src);
+                }
+            } catch (err) {
+                console.error("Visual render fail:", err);
+                canvasDisplay.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-full text-red-500 p-8 text-center">
+                        <i data-lucide="alert-octagon" class="w-10 h-10 mb-2"></i>
+                        <h4 class="font-bold text-sm">Renderer Error</h4>
+                        <p class="text-xs text-slate-500 mt-1">Failed to read content format context.</p>
+                    </div>
+                `;
+                lucide.createIcons();
+            }
+        }
+
+        // Advanced high-fidelity Canvas draw routine with Web Worker fallbacks
+        async function drawInteractivePdfCanvas(src) {
+            const canvasDisplay = document.getElementById('canvasDisplay');
+            canvasDisplay.innerHTML = `
+                <div class="flex flex-col h-full w-full bg-slate-100">
+                    <!-- Interactive pagination console -->
+                    <div class="flex items-center justify-between px-4 py-2 bg-white border-b border-slate-200 shrink-0 text-xs">
+                        <div class="flex items-center gap-2">
+                            <button id="pdfPrevPage" class="p-1 px-3 rounded hover:bg-slate-100 border border-slate-200 text-slate-700 disabled:opacity-40 flex items-center gap-1 font-semibold" onclick="changePdfPage(-1)">
+                                <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i> Prev
+                            </button>
+                            <span class="text-slate-600 font-bold px-1 bg-slate-50 py-0.5 rounded border border-slate-200" id="pdfPageIndicator">Page 1 of 1</span>
+                            <button id="pdfNextPage" class="p-1 px-3 rounded hover:bg-slate-100 border border-slate-200 text-slate-700 disabled:opacity-40 flex items-center gap-1 font-semibold" onclick="changePdfPage(1)">
+                                Next <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] bg-indigo-50 text-indigo-700 font-extrabold px-2 py-0.5 rounded border border-indigo-100 tracking-wider">Fidelity Canvas Engine</span>
+                        </div>
+                    </div>
+                    <!-- PDF page content renderer layout -->
+                    <div class="flex-1 overflow-auto p-4 flex justify-center items-start custom-scrollbar relative" id="pdfCanvasContainer">
+                        <div class="relative bg-white shadow-xl rounded-xl border border-slate-200 max-w-full p-2">
+                            <canvas id="pdfRenderCanvas" class="max-w-full h-auto rounded-lg shadow-sm block"></canvas>
+                            <!-- Live updates indicator -->
+                            <div id="pdfCanvasLoader" class="absolute inset-0 bg-white/75 backdrop-blur-sm flex flex-col items-center justify-center rounded-xl gap-2 hidden">
+                                <div class="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                                <span class="text-[10px] font-bold text-slate-500">Re-rendering Page...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+
+            try {
+                const renderBuffer = src.rawData.slice(0);
+                const loadingTask = pdfjsLib.getDocument({ data: renderBuffer });
+                currentPdfDoc = await loadingTask.promise;
+                currentPdfPage = 1;
+                await drawPdfPage();
+            } catch (err) {
+                console.error("PDF.js loading error:", err);
+                canvasDisplay.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-full text-red-500 p-8 text-center max-w-md mx-auto">
+                        <i data-lucide="alert-octagon" class="w-10 h-10 mb-2 text-rose-500"></i>
+                        <h4 class="font-bold text-slate-800 text-sm">Parsing Engine Fault</h4>
+                        <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                            We encountered an issue rendering the physical PDF pages. This often happens inside restricted sandboxed frame environments.
+                        </p>
+                        <div class="flex gap-2 mt-4 justify-center">
+                            <button onclick="switchReaderTab('text')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold">
+                                View Extracted Text
+                            </button>
+                            <button onclick="switchReaderTab('mindmap')" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold">
+                                Try AI Mindmap
+                            </button>
+                        </div>
+                    </div>
+                `;
+                lucide.createIcons();
+            }
+        }
+
+        // Active pixel-by-pixel rendering cycle with viewport calculations
+        async function drawPdfPage() {
+            if (!currentPdfDoc) return;
+            const loader = document.getElementById('pdfCanvasLoader');
+            if (loader) loader.classList.remove('hidden');
+
+            try {
+                const page = await currentPdfDoc.getPage(currentPdfPage);
+                const canvas = document.getElementById('pdfRenderCanvas');
+                if (!canvas) return;
+
+                const context = canvas.getContext('2d');
+                
+                // Adjust zoom factor dynamic multiplier. Crisp resolution multiplier of 1.5 matches sharp displays
+                const scaleFactor = currentZoom * 1.5;
+                const viewport = page.getViewport({ scale: scaleFactor });
+
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+
+                const renderContext = {
+                    canvasContext: context,
+                    viewport: viewport
+                };
+
+                await page.render(renderContext).promise;
+
+                // Sync status trackers
+                document.getElementById('pdfPageIndicator').textContent = `Page ${currentPdfPage} of ${currentPdfDoc.numPages}`;
+                document.getElementById('pdfPrevPage').disabled = currentPdfPage <= 1;
+                document.getElementById('pdfNextPage').disabled = currentPdfPage >= currentPdfDoc.numPages;
+
+            } catch (err) {
+                console.error("Failed to render active canvas frame:", err);
+            } finally {
+                if (loader) loader.classList.add('hidden');
+            }
+        }
+
+        function changePdfPage(offset) {
+            if (!currentPdfDoc) return;
+            const targetPage = currentPdfPage + offset;
+            if (targetPage >= 1 && targetPage <= currentPdfDoc.numPages) {
+                currentPdfPage = targetPage;
+                drawPdfPage();
+            }
+        }
+
+        function switchReaderTab(tab) {
+            activeReaderTab = tab;
+            const tabVisual = document.getElementById('tabVisual');
+            const tabText = document.getElementById('tabText');
+            const tabMindmap = document.getElementById('tabMindmap');
+            const tabPresentation = document.getElementById('tabPresentation');
+            
+            // Unify all mode buttons back to inactive states
+            const inactiveClasses = "flex-1 text-xs py-2.5 px-3 rounded-xl font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-50 transition-all whitespace-nowrap flex items-center justify-center gap-2";
+            tabVisual.className = inactiveClasses;
+            tabText.className = inactiveClasses;
+            tabMindmap.className = inactiveClasses;
+            tabPresentation.className = inactiveClasses;
+
+            // Apply active styles to selected view mode tab button
+            const activeClasses = "flex-1 text-xs py-2.5 px-3 rounded-xl font-bold bg-indigo-600 text-white transition-all whitespace-nowrap flex items-center justify-center gap-2 shadow-sm";
+            if (tab === 'visual') {
+                tabVisual.className = activeClasses;
+            } else if (tab === 'text') {
+                tabText.className = activeClasses;
+            } else if (tab === 'mindmap') {
+                tabMindmap.className = activeClasses;
+            } else if (tab === 'presentation') {
+                tabPresentation.className = activeClasses;
+            }
+            
+            if (activeSourceId) {
+                selectSource(activeSourceId);
+            }
+        }
+
+        function zoomCanvas(zoomIn) {
+            if (activeReaderTab === 'mindmap') {
+                adjustMindmapZoom(zoomIn ? 0.15 : -0.15);
+                return;
+            }
+            if (activeReaderTab === 'presentation') {
+                return; // presentations auto-match slide container dimensions cleanly
+            }
+
+            if (zoomIn) {
+                currentZoom = Math.min(2.5, currentZoom + 0.15);
+            } else {
+                currentZoom = Math.max(0.5, currentZoom - 0.15);
+            }
+
+            // Sync visual zoom percent tracker
+            document.getElementById('zoomPercent').textContent = `${Math.round(currentZoom * 100)}%`;
+            
+            if (activeSourceId) {
+                const src = sources.find(s => s.id === activeSourceId);
+                if (src && src.type === 'pdf') {
+                    drawPdfPage();
+                } else {
+                    selectSource(activeSourceId);
+                }
+            }
+        }
+
+        async function renderMindmapView(src) {
+            const canvasDisplay = document.getElementById('canvasDisplay');
+            
+            if (!isConnected) {
+                canvasDisplay.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-full text-slate-500 p-8 text-center max-w-md mx-auto">
+                        <div class="bg-indigo-50 p-4 rounded-full border border-indigo-100 text-indigo-600 mb-4">
+                            <i data-lucide="key" class="w-8 h-8"></i>
+                        </div>
+                        <h4 class="font-bold text-slate-800 text-sm">API Key Required for Mindmaps</h4>
+                        <p class="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                            Generating a custom interactive Mind Map requires connected access to the live <strong>Gemini 2.5 Flash</strong> intelligence model. Please enter your API key above first.
+                        </p>
+                        <button onclick="document.getElementById('apiKeyInput').focus()" class="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all">
+                            Connect API Key
+                        </button>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            // If mindmap is already cached, render it instantly
+            if (src.mindmap) {
+                displayInteractiveMindmap(src.mindmap);
+                return;
+            }
+
+            // Otherwise, prompt user with clean, non-overflowed onboarding card to create the Mind Map
+            canvasDisplay.innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-center p-8 max-w-sm mx-auto">
+                    <div class="bg-indigo-50 text-indigo-600 p-4 rounded-full border border-indigo-100 mb-4 animate-bounce">
+                        <i data-lucide="git-branch" class="w-10 h-10"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-800 text-sm mb-1">Generate Interactive Mind Map</h3>
+                    <p class="text-xs text-slate-500 mb-5 leading-relaxed">Let Gemini 2.5 Flash study the document to generate a structured, multi-tier relationship mind map.</p>
+                    <button onclick="triggerMindmapAI(this)" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-3 rounded-xl transition-all shadow-md shadow-indigo-100">
+                        Synthesize Map Now
+                    </button>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        async function triggerMindmapAI(btnElement) {
+            const src = sources.find(s => s.id === activeSourceId);
+            if (!src) return;
+
+            // Load inline spinner inside card
+            btnElement.disabled = true;
+            btnElement.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5 animate-spin inline-block mr-1"></i> Analyzing Structure...`;
+            lucide.createIcons();
+
+            try {
+                const apiKey = document.getElementById('apiKeyInput').value.trim();
+                const mindmapData = await fetchMindmapFromGemini(apiKey, src.content);
+                src.mindmap = mindmapData; // Cache it
+                displayInteractiveMindmap(mindmapData);
+            } catch (err) {
+                console.error("Mindmap Generation Error:", err);
+                const canvasDisplay = document.getElementById('canvasDisplay');
+                canvasDisplay.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-full text-red-500 p-8 text-center max-w-md mx-auto">
+                        <i data-lucide="alert-octagon" class="w-10 h-10 mb-2 text-rose-500"></i>
+                        <h4 class="font-bold text-sm text-slate-800">Mind Map Generation Failed</h4>
+                        <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                            An error occurred during structured analysis: <strong class="text-rose-600">${err.message}</strong>. Please verify your API key limits or billing quotas and try again.
+                        </p>
+                        <button onclick="selectSource('${src.id}')" class="mt-4 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold transition-all">
+                            Retry Generation
+                        </button>
+                    </div>
+                `;
+                lucide.createIcons();
+            }
+        }
+
+        async function fetchMindmapFromGemini(apiKey, docContent) {
+            // Strictly using Gemini 2.5 Flash endpoint
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            
+            const systemPrompt = `
+                You are a visual tree visualizer. Your task is to organize key topics, sub-topics, event deadlines, and important announcements from the document into a strict structured Mindmap JSON schema.
+                
+                You MUST return ONLY a valid raw JSON object. Do not wrap with markdown code fences.
+                
+                JSON Schema Structure:
+                {
+                  "name": "Central Document Title (under 4 words)",
+                  "description": "General summary of the document context",
+                  "children": [
+                    {
+                      "name": "Subtopic/Branch Title (under 4 words)",
+                      "description": "Concise summary/event explanation of this branch details",
+                      "children": [
+                         {
+                           "name": "Leaf Node Title",
+                           "description": "Extracted date, location, or rule details"
+                         }
+                      ]
+                    }
+                  ]
+                }
+                
+                Generate a robust hierarchy representing the actual timeline, structural guidelines, or rules defined inside the document text. Max depth: 3 levels.
+            `.trim();
+
+            const promptPayload = `
+                DOCUMENT TEXT CONTENT:
+                ${docContent || "The document is empty."}
+            `.trim();
+
+            const payload = {
+                contents: [
+                    {
+                        role: "user",
+                        parts: [{ text: promptPayload }]
+                    }
+                ],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
+            };
+
+            const response = await fetchWithBackoff(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+            const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!textResponse) throw new Error("Empty AI response received.");
+
+            // Defensive stripping of potential Markdown JSON block fences
+            let cleanText = textResponse.trim();
+            if (cleanText.startsWith('```')) {
+                cleanText = cleanText.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+            }
+
+            return JSON.parse(cleanText);
+        }
+
+        // Render the fully interactive SVG Mindmap on Canvas
+        function displayInteractiveMindmap(data) {
+            const canvasDisplay = document.getElementById('canvasDisplay');
+            
+            // Build viewport controls
+            canvasDisplay.innerHTML = `
+                <div class="flex flex-col h-full w-full bg-slate-50 relative select-none">
+                    <!-- Interactive SVG controls overlay -->
+                    <div class="absolute bottom-4 left-4 bg-white border border-slate-200 rounded-xl shadow-md p-1 flex items-center gap-1 z-10">
+                        <button onclick="adjustMindmapZoom(0.15)" class="hover:bg-slate-50 text-slate-600 p-2 rounded-lg transition-colors" title="Zoom In"><i data-lucide="zoom-in" class="w-4 h-4"></i></button>
+                        <button onclick="adjustMindmapZoom(-0.15)" class="hover:bg-slate-50 text-slate-600 p-2 rounded-lg transition-colors" title="Zoom Out"><i data-lucide="zoom-out" class="w-4 h-4"></i></button>
+                        <button onclick="resetMindmapViewport()" class="hover:bg-slate-50 text-slate-600 p-2 rounded-lg transition-colors" title="Reset View"><i data-lucide="maximize" class="w-4 h-4"></i></button>
+                    </div>
+
+                    <!-- Minimalist Detail Side Panel Overlay -->
+                    <div id="mindmapDetailPanel" class="absolute top-4 right-4 bg-white/95 backdrop-blur-md border border-slate-200 max-w-xs w-64 rounded-2xl p-4 shadow-xl z-10 transition-all transform translate-y-2 opacity-0 pointer-events-none">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-2 mb-2">
+                            <span class="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Node Details</span>
+                            <button onclick="hideMindmapDetail()" class="text-slate-400 hover:text-slate-600 p-0.5 rounded-lg"><i data-lucide="x" class="w-4 h-4"></i></button>
+                        </div>
+                        <h4 id="mindmapDetailTitle" class="font-bold text-xs text-slate-900 leading-tight">Branch Node</h4>
+                        <p id="mindmapDetailDesc" class="text-[11px] text-slate-600 leading-relaxed mt-2">Branch details will appear here dynamically upon clicking node elements.</p>
+                    </div>
+
+                    <!-- Draggable Interactive SVG Canvas Container -->
+                    <div id="svgContainer" class="w-full h-full cursor-grab" 
+                         onmousedown="startMindmapPan(event)" 
+                         onmousemove="handleMindmapPan(event)" 
+                         onmouseup="stopMindmapPan()" 
+                         onmouseleave="stopMindmapPan()">
+                        <svg id="mindmapSvg" class="w-full h-full">
+                            <g id="mindmapGroup">
+                                <!-- Dynamic links and nodes will be injected here -->
+                            </g>
+                        </svg>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+            
+            // Layout nodes mathematically using a left-to-right horizontal tree algorithm
+            buildSvgTree(data);
+            resetMindmapViewport();
+        }
+
+        // Left-to-Right layout tree builder
+        function buildSvgTree(rootData) {
+            const svgGroup = document.getElementById('mindmapGroup');
+            if (!svgGroup) return;
+
+            const levels = [];
+            const links = [];
+            const nodes = [];
+
+            function traverse(node, depth = 0, parentId = null) {
+                if (!levels[depth]) levels[depth] = [];
+                
+                const id = 'node_' + Math.random().toString(36).substr(2, 9);
+                const processedNode = {
+                    id,
+                    name: node.name,
+                    description: node.description || 'No additional insights documented for this sub-topic.',
+                    depth,
+                    parentId
+                };
+                
+                levels[depth].push(processedNode);
+                nodes.push(processedNode);
+
+                if (parentId) {
+                    links.push({ from: parentId, to: id });
+                }
+
+                if (node.children && node.children.length > 0) {
+                    node.children.forEach(child => traverse(child, depth + 1, id));
+                }
+            }
+
+            traverse(rootData);
+
+            const containerHeight = Math.max(document.getElementById('canvasDisplay').clientHeight || 500, 450);
+            const xOffset = 230; // Horizontal branch width gap
+
+            // Position calculation
+            levels.forEach((levelNodes, depth) => {
+                const totalNodes = levelNodes.length;
+                levelNodes.forEach((node, index) => {
+                    node.x = 80 + (depth * xOffset);
+                    // Distribute vertically symmetrical to standard center point
+                    const verticalGap = containerHeight / (totalNodes + 1);
+                    node.y = verticalGap * (index + 1);
+                });
+            });
+
+            // Clean svg container
+            svgGroup.innerHTML = '';
+
+            // Draw link connections first (below nodes) with premium Bezier interpolation paths
+            links.forEach(link => {
+                const source = nodes.find(n => n.id === link.from);
+                const target = nodes.find(n => n.id === link.to);
+                if (source && target) {
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    
+                    // Create beautiful cubic bezier curve from parent to child
+                    const midX = (source.x + target.x) / 2;
+                    const d = `M ${source.x + 120} ${source.y} C ${midX} ${source.y}, ${midX} ${target.y}, ${target.x} ${target.y}`;
+                    
+                    path.setAttribute('d', d);
+                    path.setAttribute('fill', 'none');
+                    path.setAttribute('stroke', '#cbd5e1');
+                    path.setAttribute('stroke-width', '2');
+                    path.setAttribute('class', 'mindmap-link');
+                    svgGroup.appendChild(path);
+                }
+            });
+
+            // Draw nodes
+            nodes.forEach(node => {
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.setAttribute('transform', `translate(${node.x}, ${node.y - 25})`);
+                g.setAttribute('class', 'mindmap-node');
+                g.onclick = (e) => {
+                    e.stopPropagation();
+                    showMindmapDetail(node.name, node.description);
+                };
+
+                // Define styling palette based on tree levels
+                let rectFill = '#ffffff';
+                let rectStroke = '#6366f1'; // Level 1 branch
+                let textFill = '#1e293b';
+
+                if (node.depth === 0) { // Root
+                    rectFill = '#4f46e5';
+                    rectStroke = '#4338ca';
+                    textFill = '#ffffff';
+                } else if (node.depth === 2) { // Leaf/Topic Details
+                    rectStroke = '#10b981'; // Emerald branch
+                }
+
+                // Create Node Capsule Rect
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('width', '200');
+                rect.setAttribute('height', '50');
+                rect.setAttribute('rx', '12');
+                rect.setAttribute('fill', rectFill);
+                rect.setAttribute('stroke', rectStroke);
+                rect.setAttribute('stroke-width', '1.5');
+                rect.setAttribute('filter', 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.05))');
+
+                // Create Node Text label
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', '15');
+                text.setAttribute('y', '28');
+                text.setAttribute('fill', textFill);
+                text.setAttribute('font-size', '11px');
+                text.setAttribute('font-weight', '600');
+                text.setAttribute('class', 'font-sans truncate');
+                
+                // Keep text readable inside constraints
+                const labelText = node.name.length > 22 ? node.name.substring(0, 20) + '...' : node.name;
+                text.textContent = labelText;
+
+                // Create tiny helper icon indicator if detailed data is attached
+                const helpText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                helpText.setAttribute('x', '175');
+                helpText.setAttribute('y', '30');
+                helpText.setAttribute('fill', node.depth === 0 ? '#c7d2fe' : '#94a3b8');
+                helpText.setAttribute('font-size', '14px');
+                helpText.setAttribute('font-weight', '700');
+                helpText.textContent = '+';
+
+                g.appendChild(rect);
+                g.appendChild(text);
+                g.appendChild(helpText);
+                svgGroup.appendChild(g);
+            });
+        }
+
+        // Mindmap panning viewport controllers
+        function startMindmapPan(e) {
+            isPanning = true;
+            const container = document.getElementById('svgContainer');
+            container.className = "w-full h-full cursor-grabbing";
+            startPanX = e.clientX - mindmapPanX;
+            startPanY = e.clientY - mindmapPanY;
+        }
+
+        function handleMindmapPan(e) {
+            if (!isPanning) return;
+            mindmapPanX = e.clientX - startPanX;
+            mindmapPanY = e.clientY - startPanY;
+            updateMindmapTransform();
+        }
+
+        function stopMindmapPan() {
+            isPanning = false;
+            const container = document.getElementById('svgContainer');
+            if (container) container.className = "w-full h-full cursor-grab";
+        }
+
+        function adjustMindmapZoom(delta) {
+            mindmapZoom = Math.max(0.4, Math.min(2.0, mindmapZoom + delta));
+            updateMindmapTransform();
+        }
+
+        function resetMindmapViewport() {
+            mindmapPanX = 30;
+            mindmapPanY = 40;
+            mindmapZoom = 0.95;
+            updateMindmapTransform();
+        }
+
+        function updateMindmapTransform() {
+            const group = document.getElementById('mindmapGroup');
+            if (group) {
+                group.setAttribute('transform', `translate(${mindmapPanX}, ${mindmapPanY}) scale(${mindmapZoom})`);
+            }
+        }
+
+        function showMindmapDetail(title, desc) {
+            const panel = document.getElementById('mindmapDetailPanel');
+            const detailTitle = document.getElementById('mindmapDetailTitle');
+            const detailDesc = document.getElementById('mindmapDetailDesc');
+
+            if (panel && detailTitle && detailDesc) {
+                detailTitle.textContent = title;
+                detailDesc.textContent = desc;
+                
+                panel.classList.remove('pointer-events-none', 'opacity-0', 'translate-y-2');
+                panel.classList.add('opacity-100', 'translate-y-0');
+            }
+        }
+
+        function hideMindmapDetail() {
+            const panel = document.getElementById('mindmapDetailPanel');
+            if (panel) {
+                panel.classList.remove('opacity-100', 'translate-y-0');
+                panel.classList.add('pointer-events-none', 'opacity-0', 'translate-y-2');
+            }
+        }
+
+        async function renderPresentationView(src) {
+            const canvasDisplay = document.getElementById('canvasDisplay');
+            
+            if (!isConnected) {
+                canvasDisplay.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-full text-slate-500 p-8 text-center max-w-md mx-auto">
+                        <div class="bg-emerald-50 p-4 rounded-full border border-emerald-100 text-emerald-600 mb-4">
+                            <i data-lucide="presentation" class="w-8 h-8"></i>
+                        </div>
+                        <h4 class="font-bold text-slate-800 text-sm">API Key Required for Presentations</h4>
+                        <p class="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                            Drafting a custom minimalistic Slide Presentation requires connected access to the live <strong>Gemini 2.5 Flash</strong> model. Please paste your API key above first.
+                        </p>
+                        <button onclick="document.getElementById('apiKeyInput').focus()" class="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all">
+                            Connect API Key
+                        </button>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            // If presentation is already cached, render it instantly
+            if (src.presentation) {
+                displayInteractivePresentation(src.presentation);
+                return;
+            }
+
+            // Prompt user with a beautiful center card to create presentation deck
+            canvasDisplay.innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-center p-8 max-w-sm mx-auto">
+                    <div class="bg-emerald-50 text-emerald-600 p-4 rounded-full border border-emerald-100 mb-4 animate-pulse">
+                        <i data-lucide="presentation" class="w-10 h-10"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-800 text-sm mb-1">Create Minimal Presentation</h3>
+                    <p class="text-xs text-slate-500 mb-5 leading-relaxed">Instantly distill document schedules, parent guidelines, and notices into a crisp slide deck.</p>
+                    <button onclick="triggerPresentationAI(this)" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-3 rounded-xl transition-all shadow-md shadow-emerald-100">
+                        Draft Slides Now
+                    </button>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        async function triggerPresentationAI(btnElement) {
+            const src = sources.find(s => s.id === activeSourceId);
+            if (!src) return;
+
+            // Load inline spinner inside card
+            btnElement.disabled = true;
+            btnElement.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5 animate-spin inline-block mr-1"></i> Designing Slide Deck...`;
+            lucide.createIcons();
+
+            try {
+                const apiKey = document.getElementById('apiKeyInput').value.trim();
+                const presentationData = await fetchPresentationFromGemini(apiKey, src.content);
+                src.presentation = presentationData; // Cache it
+                displayInteractivePresentation(presentationData);
+            } catch (err) {
+                console.error("Presentation Generation Error:", err);
+                const canvasDisplay = document.getElementById('canvasDisplay');
+                canvasDisplay.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-full text-red-500 p-8 text-center max-w-md mx-auto">
+                        <i data-lucide="alert-octagon" class="w-10 h-10 mb-2 text-rose-500"></i>
+                        <h4 class="font-bold text-sm text-slate-800">Presentation Crafting Failed</h4>
+                        <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                            An error occurred during slide compilation: <strong class="text-rose-600">${err.message}</strong>. Please verify your API key limits or billing quotas and try again.
+                        </p>
+                        <button onclick="selectSource('${src.id}')" class="mt-4 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold transition-all">
+                            Retry Slide Generation
+                        </button>
+                    </div>
+                `;
+                lucide.createIcons();
+            }
+        }
+
+        async function fetchPresentationFromGemini(apiKey, docContent) {
+            // Strictly using Gemini 2.5 Flash endpoint
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            
+            const systemPrompt = `
+                You are a minimalistic presentation designer. Your task is to summarize the uploaded school circular, parent document, or PDF rules into a beautiful, bite-sized slide deck presentation of 4 to 6 slides.
+                
+                You MUST return ONLY a valid raw JSON object. Do not wrap with markdown code fences.
+                
+                JSON Schema Structure:
+                {
+                  "title": "Main Presentation Subject Title",
+                  "slides": [
+                    {
+                      "title": "Slide Title (e.g., Executive Summary, Timings, Key Dates)",
+                      "content": [
+                         "Short summary bullet point 1 (max 10 words)",
+                         "Short summary bullet point 2 (max 10 words)",
+                         "Short summary bullet point 3 (max 10 words)"
+                      ],
+                      "footer": "Bite-sized contextual note or instruction"
+                    }
+                  ]
+                }
+                
+                Make the content highly readable and parent-friendly, focusing heavily on what parents actually need to know (dates, timings, specific expectations).
+            `.trim();
+
+            const promptPayload = `
+                DOCUMENT TEXT CONTENT TO PRESENT:
+                ${docContent || "The document is empty."}
+            `.trim();
+
+            const payload = {
+                contents: [
+                    {
+                        role: "user",
+                        parts: [{ text: promptPayload }]
+                    }
+                ],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
+            };
+
+            const response = await fetchWithBackoff(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+            const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!textResponse) throw new Error("Empty AI response received.");
+
+            // Defensive stripping of potential Markdown JSON block fences
+            let cleanText = textResponse.trim();
+            if (cleanText.startsWith('```')) {
+                cleanText = cleanText.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+            }
+
+            return JSON.parse(cleanText);
+        }
+
+        function displayInteractivePresentation(data) {
+            const canvasDisplay = document.getElementById('canvasDisplay');
+            activeSlideIndex = 0;
+
+            canvasDisplay.innerHTML = `
+                <div class="flex flex-col h-full w-full bg-slate-900 text-white p-6 relative select-none justify-between">
+                    <!-- Presentation Header Info -->
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
+                        <div class="flex items-center gap-2">
+                            <span class="bg-emerald-500/10 text-emerald-400 p-1 rounded-lg border border-emerald-500/20"><i data-lucide="presentation" class="w-4 h-4"></i></span>
+                            <span class="text-xs font-bold text-slate-300 truncate max-w-xs md:max-w-md">${data.title}</span>
+                        </div>
+                        <span class="text-[10px] bg-slate-800 text-slate-400 font-extrabold px-2 py-0.5 rounded-full border border-slate-700 tracking-wider">SLIDES VIEW</span>
+                    </div>
+
+                    <!-- Slide Display Card wrapper -->
+                    <div id="slideContentWrapper" class="flex-1 my-6 flex items-center justify-center">
+                        <!-- Dynamic Slide HTML injected here -->
+                    </div>
+
+                    <!-- Presentation Controls Footer -->
+                    <div class="flex items-center justify-between bg-slate-950 p-2 border border-slate-800 rounded-xl shrink-0">
+                        <button onclick="changeActiveSlide(-1)" class="px-4 py-2 hover:bg-slate-900 text-slate-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors">
+                            <i data-lucide="chevron-left" class="w-4 h-4"></i> Prev
+                        </button>
+                        
+                        <!-- Mini Dot Indicators -->
+                        <div class="flex gap-2" id="slideDotContainer">
+                            <!-- Injected dynamically -->
+                        </div>
+
+                        <button onclick="changeActiveSlide(1)" class="px-4 py-2 hover:bg-slate-900 text-slate-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors">
+                            Next <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+            
+            // Initial render
+            renderActiveSlideCard(data);
+        }
+
+        function renderActiveSlideCard(data) {
+            const wrapper = document.getElementById('slideContentWrapper');
+            const dotContainer = document.getElementById('slideDotContainer');
+            if (!wrapper || !dotContainer) return;
+
+            const slide = data.slides[activeSlideIndex];
+            const total = data.slides.length;
+
+            // Render current card slide layout
+            wrapper.innerHTML = `
+                <div class="w-full max-w-xl bg-slate-800/60 border border-slate-700/60 rounded-3xl p-8 shadow-2xl flex flex-col justify-between aspect-[1.6/1] slide-transition scale-95 opacity-0 animate-in fade-in zoom-in-95 duration-300">
+                    <div class="flex justify-between items-center mb-6">
+                        <span class="text-[10px] font-mono tracking-widest text-emerald-400 font-bold uppercase">Slide ${activeSlideIndex + 1} of ${total}</span>
+                        <i data-lucide="sparkles" class="w-4 h-4 text-emerald-400/50"></i>
+                    </div>
+
+                    <div class="flex-1 flex flex-col justify-center space-y-4">
+                        <h3 class="text-lg md:text-xl font-extrabold text-white tracking-tight leading-snug">${slide.title}</h3>
+                        <ul class="space-y-2.5">
+                            ${slide.content.map(bullet => `
+                                <li class="text-xs md:text-sm text-slate-300 flex items-start gap-2.5">
+                                    <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full mt-2 flex-shrink-0"></span>
+                                    <span class="leading-relaxed font-medium">${bullet}</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+
+                    <div class="mt-6 border-t border-slate-700/50 pt-3 text-[10px] text-slate-500 font-bold flex justify-between items-center italic">
+                        <span>${slide.footer || "Notebook Presentation Slide"}</span>
+                        <span>ParentLLM</span>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+
+            // Render Dot Indicators
+            dotContainer.innerHTML = '';
+            for (let i = 0; i < total; i++) {
+                const dot = document.createElement('div');
+                dot.className = `w-2 h-2 rounded-full transition-all duration-300 ${i === activeSlideIndex ? 'bg-emerald-400 w-4' : 'bg-slate-700'}`;
+                dotContainer.appendChild(dot);
+            }
+        }
+
+        function changeActiveSlide(offset) {
+            if (!activeSourceId) return;
+            const src = sources.find(s => s.id === activeSourceId);
+            if (!src || !src.presentation) return;
+
+            const total = src.presentation.slides.length;
+            const targetIndex = activeSlideIndex + offset;
+
+            if (targetIndex >= 0 && targetIndex < total) {
+                activeSlideIndex = targetIndex;
+                renderActiveSlideCard(src.presentation);
+            }
+        }
+
+        async function fetchGemini3FlashAgentic(apiKey, prompt, contextText) {
+            // Strictly configured to use Gemini 2.5 Flash model
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            
+            const systemPrompt = `
+                You are ParentLLM, an agentic academic researcher, general knowledge advisor, and administrative notebook assistant. You operate in two distinct modes depending on the user's query:
+                
+                1. GENERAL AGENT MODE (General Knowledge / External Queries):
+                   If the user asks a generic question unrelated to the uploaded documents (e.g., "who is the first prime minister of india", "explain Newton's laws", "latest news on Mars missions"), answer fully and accurately using your general knowledge and the integrated Google Search grounding engine.
+                
+                2. DOCUMENT AGENT MODE (Context-specific Queries):
+                   If the user asks about the active selected research sources, you MUST:
+                   - Answer using facts found directly in the provided context text.
+                   - For every fact or procedural rule you mention, cite the source precisely.
+                   - Read the page boundary markers in the context (formatted as "--- Page X ---") and specify BOTH the DOCUMENT TITLE and the PAGE NUMBER (e.g., "(Source: Fee_Circular_2026.pdf, Page 3)").
+                   - If the question is about the uploaded files but the information is missing, state clearly that it is not documented in the provided files, then offer a general helpful answer using your search tools.
+                
+                Presentation Guidelines:
+                - Use structured Markdown formatting.
+                - Organize multi-document comparisons, dates, or procedural guidelines into clean tables.
+                - Highlight key deadlines, actions, and dates in bold.
+            `.trim();
+
+            const promptPayload = `
+                ACTIVE SELECTED RESEARCH SOURCES (CONTEXT):
+                ${contextText || "[No active sources are selected. Please answer using general knowledge or search grounding.]"}
+
+                USER INQUIRY:
+                ${prompt}
+            `.trim();
+
+            const payload = {
+                contents: [
+                    {
+                        role: "user",
+                        parts: [{ text: promptPayload }]
+                    }
+                ],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+                tools: [{ "google_search": {} }] // Enable live Google Search grounding for agentic capabilities
+            };
+
+            const response = await fetchWithBackoff(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+            const candidate = data.candidates?.[0];
+            if (!candidate || !candidate.content?.parts?.[0]?.text) {
+                throw new Error("No response output returned from Gemini.");
+            }
+
+            return candidate.content.parts[0].text;
+        }
+
+        async function handleChatSubmit() {
+            const input = document.getElementById('chatInput');
+            const messageText = input.value.trim();
+            if (!messageText) return;
+
+            if (!isConnected) {
+                showAlert("Please input your Gemini API Key in the top connection bar and click 'Connect' first.");
+                return;
+            }
+
+            const apiKey = document.getElementById('apiKeyInput').value.trim();
+
+            // Append user message
+            appendChatMessage("user", messageText);
+            input.value = '';
+
+            // Extract context from selected sources
+            const selectedSources = sources.filter(s => s.selected);
+            let contextText = "";
+            selectedSources.forEach(s => {
+                contextText += `[DOCUMENT TITLE: ${s.name}]\n${s.content}\n====================\n`;
+            });
+
+            // Display loading indicator
+            const indicator = document.getElementById('chatTypingIndicator');
+            indicator.classList.remove('hidden');
+
+            try {
+                const answer = await fetchGemini3FlashAgentic(apiKey, messageText, contextText);
+                indicator.classList.add('hidden');
+                appendChatMessage("assistant", parseMarkdown(answer));
+            } catch (err) {
+                indicator.classList.add('hidden');
+                appendChatMessage("assistant", `
+                    <div class="text-red-600 font-bold flex items-center gap-1.5 mb-1">
+                        <i data-lucide="alert-circle" class="w-4 h-4"></i> Gemini API Connection Error
+                    </div>
+                    <p class="text-slate-600 text-xs leading-relaxed">
+                        Details: <strong>${err.message}</strong>. Please verify your API key value or check your billing quota thresholds on Google AI Studio.
+                    </p>
+                `);
+            }
+        }
+
+        function appendChatMessage(sender, htmlContent) {
+            const welcome = document.getElementById('initialWelcomeBox');
+            if (welcome) welcome.remove();
+
+            const chatMessages = document.getElementById('chatMessages');
+            const wrap = document.createElement('div');
+
+            if (sender === "user") {
+                wrap.className = "flex justify-end";
+                wrap.innerHTML = `
+                    <div class="bg-indigo-600 text-white px-4 py-3 rounded-2xl rounded-tr-none text-xs max-w-[85%] shadow-sm font-medium leading-relaxed">
+                        ${escapeHtml(htmlContent)}
+                    </div>
+                `;
+            } else {
+                wrap.className = "flex justify-start";
+                wrap.innerHTML = `
+                    <div class="bg-white border border-slate-200 text-slate-800 px-4 py-3 rounded-2xl rounded-tl-none text-xs max-w-[90%] shadow-sm markdown-content">
+                        ${htmlContent}
+                    </div>
+                `;
+            }
+            chatMessages.appendChild(wrap);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            lucide.createIcons();
+        }
+
+        function clearChat() {
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = `
+                <div id="initialWelcomeBox" class="bg-indigo-50 border border-indigo-100 text-indigo-950 p-4 rounded-2xl text-xs space-y-2 shadow-sm">
+                    <p class="font-bold flex items-center gap-1.5">
+                        <i data-lucide="info" class="w-4 h-4 text-indigo-600"></i>
+                        Ready for Comparative Research!
+                    </p>
+                    <p class="text-slate-600 leading-relaxed">
+                        Insert your Gemini API Key in the top status bar, upload files on the left, and check their boxes to submit them to the AI Assistant. You can ask:
+                    </p>
+                    <div class="space-y-1 pl-1">
+                        <button onclick="prefillInput('Summarize the main points and extract key deadlines or events.')" class="block text-left text-indigo-700 hover:underline font-medium text-[11px]">• "Summarize the main points and extract key deadlines or events."</button>
+                        <button onclick="prefillInput('Compare the uploaded documents and identify their differences.')" class="block text-left text-indigo-700 hover:underline font-medium text-[11px]">• "Compare the uploaded documents and identify their differences."</button>
+                        <button onclick="prefillInput('Who is the first Prime Minister of India?')" class="block text-left text-indigo-700 hover:underline font-medium text-[11px]">• "Who is the first Prime Minister of India?" (General Agent Test)</button>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function parseMarkdown(text) {
+            let processed = text;
+            
+            // Format basic bullet points list
+            processed = processed.replace(/^\s*[-*]\s+(.*?)$/gm, '<li>$1</li>');
+            processed = processed.replace(/(<li>.*?<\/li>)/gs, '<ul>$1</ul>');
+            processed = processed.replace(/<\/ul>\s*<ul>/g, ''); // Flatten consecutive blocks
+
+            // Robust markdown table parses
+            processed = processed.replace(/\|(.+)\|/g, (match) => {
+                const cells = match.split('|').map(c => c.trim()).filter((c, idx, arr) => idx > 0 && idx < arr.length - 1);
+                const isHeaderSeparator = match.includes('---');
+                if (isHeaderSeparator) return '';
+                return `<tr>${cells.map(cell => `<td>${cell}</td>`).join('')}</tr>`;
+            });
+            processed = processed.replace(/(<tr>[\s\S]+?<\/tr>)/g, '<table>$1</table>');
+
+            // Strong formatting
+            processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            
+            // Clean spacing layouts
+            processed = processed.split('\n\n').map(p => {
+                if (p.trim().startsWith('<table') || p.trim().startsWith('<ul')) {
+                    return p;
+                }
+                return `<p>${p.replace(/\n/g, '<br>')}</p>`;
+            }).join('');
+
+            return processed;
+        }
+    </script>
+</body>
+</html>
